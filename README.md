@@ -64,6 +64,27 @@ Create a `.env` file, where the `composer.json` file lives, and add the followin
 ENVATO_TOKEN="<YOUR ENVATO PERSONAL TOKEN FROM https://build.envato.com/create-token>"
 ```
 
+### Avada / ThemeFusion plugins
+
+Avada's premium plugins (Avada Core, Avada Builder, …) are not sold on Envato
+but served by ThemeFusion. Flag the theme with `"theme-fusion": true`:
+
+```json
+"envato/avada-theme": {
+    "item-id": 2833226,
+    "type": "wordpress-theme",
+    "theme-fusion": true
+}
+```
+
+- The plugins become available as `theme-fusion/<slug>` packages,
+  e.g. `theme-fusion/fusion-white-label-branding`, for the theme's current version.
+- Plugins Avada marks as required (`fusion-core`, `fusion-builder`) are installed
+  automatically with the theme.
+- Downloads are authorized with the theme's purchase code, looked up via the Envato API,
+  so your token needs the **"List purchases you've made"** permission.
+  The purchase code is never written to `composer.lock`.
+
 ## Usage
 
 Once the plugin is installed and configured,
