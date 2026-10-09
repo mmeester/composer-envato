@@ -84,6 +84,8 @@ but served by ThemeFusion. Flag the theme with `"theme-fusion": true`:
 - Downloads are authorized with the theme's purchase code, looked up via the Envato API,
   so your token needs the **"List purchases you've made"** permission.
   The purchase code is never written to `composer.lock`.
+- ThemeFusion only serves the domain the purchase code is registered on (in Avada's dashboard).
+  It is read from `THEME_FUSION_DOMAIN`, or `WP_HOME` on Bedrock, e.g. `THEME_FUSION_DOMAIN="https://example.com"`.
 
 ## Usage
 
