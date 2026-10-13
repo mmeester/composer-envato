@@ -84,8 +84,27 @@ but served by ThemeFusion. Flag the theme with `"theme-fusion": true`:
 - Downloads are authorized with the theme's purchase code, looked up via the Envato API,
   so your token needs the **"List purchases you've made"** permission.
   The purchase code is never written to `composer.lock`.
+- All other premium plugins (ACF Pro, LayerSlider, Slider Revolution, …) are optional, pick the ones you need:
+
+  ```shell
+  composer show --all 'theme-fusion/*'                       # list available plugins
+  composer require theme-fusion/advanced-custom-fields-pro    # add one, saved in composer.json
+  ```
+
 - ThemeFusion only serves the domain the purchase code is registered on (in Avada's dashboard).
   It is read from `THEME_FUSION_DOMAIN`, or `WP_HOME` on Bedrock, e.g. `THEME_FUSION_DOMAIN="https://example.com"`.
+
+### CI / GitHub Actions
+
+Nothing is read from disk, environment variables are enough:
+
+```yaml
+- run: composer install --no-dev --no-interaction
+  env:
+    ENVATO_TOKEN: ${{ secrets.ENVATO_TOKEN }}
+    # The domain Avada is registered on, sent as Referer only, so the runner host does not matter
+    THEME_FUSION_DOMAIN: https://example.com
+```
 
 ## Usage
 

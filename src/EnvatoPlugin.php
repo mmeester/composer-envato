@@ -132,7 +132,8 @@ class EnvatoPlugin implements PluginInterface, EventSubscriberInterface
             $package = new ThemeFusionPackage(
                 $plugin['slug'],
                 $plugin['version'],
-                $this->themeFusionApi->getDownloadRequestUrl($plugin['name'], $themeVersion)
+                $this->themeFusionApi->getDownloadRequestUrl($plugin['name'], $themeVersion),
+                $plugin['name']
             );
             $packages[] = $package;
 
@@ -158,13 +159,22 @@ class EnvatoPlugin implements PluginInterface, EventSubscriberInterface
      */
     public function handlePreDownloadEvent(PreFileDownloadEvent $event): void
     {
-        if (! $this->config->isValid() || $event->getType() !== 'package') {
+        if ($event->getType() !== 'package') {
             return;
         }
 
         $processedUrl = $event->getProcessedUrl();
+        $isThemeFusion = \strpos($processedUrl, ThemeFusionApi::API_BASE_URL) === 0;
+
+        if (! $this->config->isValid()) {
+            // Otherwise the download goes out unauthorized and fails as an empty zip
+            if ($isThemeFusion) {
+                throw new \RuntimeException('Set ENVATO_TOKEN to download ThemeFusion plugins.');
+            }
+            return;
+        }
         // Match on URL: when installing from composer.lock the package is not a ThemeFusionPackage
-        if (\strpos($processedUrl, ThemeFusionApi::API_BASE_URL) === 0) {
+        if ($isThemeFusion) {
             $downloadUrl = $this->getThemeFusionDownloadUrl($processedUrl);
             // Composer downloads packages with the package's transport options, not the event's
             $package = $event->getContext();
