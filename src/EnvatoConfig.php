@@ -19,7 +19,7 @@ class EnvatoConfig
     public const ENV_VAR_THEME_FUSION_DOMAIN = 'THEME_FUSION_DOMAIN';
 
     /**
-     * @var array{token?:string, packages?:array{item-id:int|string|null, type:string|null, theme-fusion?:bool}}
+     * @var array{token?:string, packages?:array{item-id:int|string|null, type:string|null, theme-fusion?:bool}, fallback-dir?:string}
      */
     protected $config;
 
@@ -85,6 +85,16 @@ class EnvatoConfig
         if (\is_string($cwd) && \file_exists($cwd . DIRECTORY_SEPARATOR . '.env')) {
             Dotenv::createImmutable($cwd)->safeLoad();
         }
+    }
+
+    /**
+     * Directory with <package>-<version>.zip files, used when a download cannot be authorized.
+     */
+    public function getFallbackDir(): ?string
+    {
+        $fallbackDir = $this->config['fallback-dir'] ?? null;
+
+        return \is_string($fallbackDir) && $fallbackDir !== '' ? $fallbackDir : null;
     }
 
     public function getThemeFusionDomain(): ?string
