@@ -106,6 +106,26 @@ Nothing is read from disk, environment variables are enough:
     THEME_FUSION_DOMAIN: https://example.com
 ```
 
+### Download limit and fallback zips
+
+Envato limits how often an item can be downloaded, and every download URL the API hands out counts.
+Packages already in Composer's cache are installed without asking the API,
+so keep the cache between CI runs (e.g. with `ramsey/composer-install`).
+
+When a download cannot be authorized (limit reached, no purchase code, no token),
+the package can be installed from a zip you keep yourself:
+
+```json
+"envato": {
+    "fallback-dir": "packages",
+    "packages": { … }
+}
+```
+
+Name each zip `<package name without vendor>-<version>.zip`, e.g. `packages/avada-theme-7.16.2.zip`
+or `packages/fusion-builder-3.16.2.zip`. The path is relative to the project root.
+Without a matching zip the install fails as before.
+
 ## Usage
 
 Once the plugin is installed and configured,

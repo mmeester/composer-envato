@@ -43,10 +43,15 @@ class EnvatoApi
      */
     public function getVersion(int $itemId): string
     {
-        $response = $this->httpDownloader->get(
-            self::API_BASE_URL . '/market/catalog/item-version?' . \http_build_query(['id' => $itemId]),
-            ['http' => ['header' => ['Authorization: Bearer ' . $this->token]]]
-        );
+        // Installing from composer.lock does not need the version, so an API failure must not stop it
+        try {
+            $response = $this->httpDownloader->get(
+                self::API_BASE_URL . '/market/catalog/item-version?' . \http_build_query(['id' => $itemId]),
+                ['http' => ['header' => ['Authorization: Bearer ' . $this->token]]]
+            );
+        } catch (TransportException $exception) {
+            return '0.0.0';
+        }
 
         // TODO HTTP 429 response. Included in this response is a HTTP header Retry-After
         if ($response->getStatusCode() === 200) {

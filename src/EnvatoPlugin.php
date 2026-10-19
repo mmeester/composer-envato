@@ -156,6 +156,10 @@ class EnvatoPlugin implements PluginInterface, EventSubscriberInterface
     /**
      * Retrieve the item's download URL from the Envato API
      * and use the item's dist URL as the cache key.
+     *
+     * Composer fires this event before it looks in its cache, so check the cache first:
+     * every download URL the Envato API hands out counts towards the item's download limit.
+     * When the download cannot be authorized, install from the fallback zip if there is one.
      */
     public function handlePreDownloadEvent(PreFileDownloadEvent $event): void
     {
@@ -165,51 +169,116 @@ class EnvatoPlugin implements PluginInterface, EventSubscriberInterface
 
         $processedUrl = $event->getProcessedUrl();
         $isThemeFusion = \strpos($processedUrl, ThemeFusionApi::API_BASE_URL) === 0;
-
-        if (! $this->config->isValid()) {
-            // Otherwise the download goes out unauthorized and fails as an empty zip
-            if ($isThemeFusion) {
-                throw new \RuntimeException('Set ENVATO_TOKEN to download ThemeFusion plugins.');
-            }
+        $isEnvato = \strpos($processedUrl, EnvatoApi::API_BASE_URL . '/market/buyer/download') === 0;
+        if (! $isThemeFusion && ! $isEnvato) {
             return;
         }
+
         // Match on URL: when installing from composer.lock the package is not a ThemeFusionPackage
-        if ($isThemeFusion) {
-            $downloadUrl = $this->getThemeFusionDownloadUrl($processedUrl);
-            // Composer downloads packages with the package's transport options, not the event's
-            $package = $event->getContext();
-            if ($package instanceof PackageInterface) {
-                $package->setTransportOptions(\array_merge_recursive(
-                    $package->getTransportOptions(),
-                    ['http' => ['header' => ['Referer: ' . $this->getThemeFusionDomain()]]]
-                ));
-            }
-        } else {
-            $downloadUrl = $this->api->getDownloadUrl($processedUrl);
+        $package = $event->getContext();
+        if (! $package instanceof PackageInterface) {
+            return;
         }
 
-        // Submit changes to Composer, if any
-        if (
-            \is_string($downloadUrl) &&
-            $downloadUrl !== '' &&
-            $downloadUrl !== $processedUrl
-        ) {
-            $event->setProcessedUrl($downloadUrl);
-            $event->setCustomCacheKey($processedUrl);
+        $event->setCustomCacheKey($processedUrl);
+        if ($this->isCached($package, $processedUrl)) {
+            return;
         }
+
+        try {
+            $downloadUrl = $isThemeFusion
+                ? $this->getThemeFusionDownloadUrl($processedUrl, $package)
+                : $this->getEnvatoDownloadUrl($processedUrl);
+        } catch (\RuntimeException $exception) {
+            $fallbackZip = $this->getFallbackZip($package);
+            if ($fallbackZip === null) {
+                throw $exception;
+            }
+
+            $this->io->writeError(\sprintf(
+                '<warning>Download of %s failed (%s), installing %s instead</warning>',
+                $package->getName(),
+                $exception->getMessage(),
+                $fallbackZip
+            ));
+            $downloadUrl = 'file://' . $fallbackZip;
+        }
+
+        $event->setProcessedUrl($downloadUrl);
+    }
+
+    /**
+     * Mirrors the cache key Composer's FileDownloader builds from the custom cache key.
+     */
+    protected function isCached(PackageInterface $package, string $cacheKey): bool
+    {
+        $cacheDir = $this->composer->getConfig()->get('cache-files-dir');
+
+        return \is_string($cacheDir) && \is_file(\sprintf(
+            '%s/%s/%s.%s',
+            $cacheDir,
+            $package->getName(),
+            \sha1($cacheKey),
+            (string)$package->getDistType()
+        ));
+    }
+
+    /**
+     * The zip for this exact version in the fallback dir, e.g. packages/avada-theme-7.16.2.zip.
+     */
+    protected function getFallbackZip(PackageInterface $package): ?string
+    {
+        $fallbackDir = $this->config->getFallbackDir();
+        if ($fallbackDir === null) {
+            return null;
+        }
+
+        $zip = \realpath(\sprintf('%s/%s-%s.zip', $fallbackDir, \basename($package->getName()), $package->getPrettyVersion()));
+
+        return $zip === false ? null : $zip;
+    }
+
+    /**
+     * @return non-empty-string
+     */
+    protected function getEnvatoDownloadUrl(string $processedUrl): string
+    {
+        if (! $this->config->isValid()) {
+            throw new \RuntimeException('Set ENVATO_TOKEN to download Envato items.');
+        }
+
+        $downloadUrl = $this->api->getDownloadUrl($processedUrl);
+        if ($downloadUrl === null) {
+            throw new \RuntimeException('The Envato API returned no download URL.');
+        }
+
+        return $downloadUrl;
     }
 
     /**
      * Authorize a ThemeFusion download with the theme's Envato purchase code.
+     *
+     * @return non-empty-string
      */
-    protected function getThemeFusionDownloadUrl(string $processedUrl): string
+    protected function getThemeFusionDownloadUrl(string $processedUrl, PackageInterface $package): string
     {
+        if (! $this->config->isValid()) {
+            // Otherwise the download goes out unauthorized and fails as an empty zip
+            throw new \RuntimeException('Set ENVATO_TOKEN to download ThemeFusion plugins.');
+        }
+
         $purchaseCode = $this->themeFusionItemId === null ? null : $this->api->getPurchaseCode($this->themeFusionItemId);
         if ($purchaseCode === null) {
             throw new \RuntimeException(
                 'No Envato purchase code found for the theme flagged "theme-fusion". The Envato token needs the "List purchases you\'ve made" permission.'
             );
         }
+
+        // Composer downloads packages with the package's transport options, not the event's
+        $package->setTransportOptions(\array_merge_recursive(
+            $package->getTransportOptions(),
+            ['http' => ['header' => ['Referer: ' . $this->getThemeFusionDomain()]]]
+        ));
 
         return $this->themeFusionApi->getDownloadUrl($processedUrl, $purchaseCode);
     }
